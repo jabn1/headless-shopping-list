@@ -3,31 +3,34 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	// "io/ioutil"
+
 	"log"
 	"net/http"
+
 	// "strconv"
 
 	"github.com/go-chi/chi"
 )
+
 type Item struct {
-	name string
-	quantity string
-	status string
+	Quantity int
+	Status   string
 }
 
 type ShoppingList struct {
-	title string
-	description string
-	fecha string
-	items []Item
+	Title       string
+	Description string
+	Fecha       string
+	Items       map[string]Item //key: item name
 }
 
 var shoppingLists map[int]ShoppingList
+var count int
 
 func main() {
 	port := "5000"
 	shoppingLists = map[int]ShoppingList{}
+	count = 1
 	r := registerRoutes()
 	fmt.Println("Listening on port :" + port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
@@ -39,7 +42,7 @@ func registerRoutes() http.Handler {
 	r.Route("/", func(r chi.Router) {
 		r.Get("/shoppinglist", getShoppingLists)
 		// r.Get("/shoppinglist/{msgId}", getMessages)
-		// r.Post("/shoppinglist", createShoppingList)
+		r.Post("/shoppinglist", createShoppingList)
 		// r.Put("/shoppinglist/{msgId}", updateMessage)
 		// r.Delete("/shoppinglist/{msgId}", deleteMessage)
 	})
@@ -47,22 +50,29 @@ func registerRoutes() http.Handler {
 }
 
 func getShoppingLists(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(shoppingLists)
 }
 
-// func createShoppingList(w http.ResponseWriter, r *http.Request) {
-// 	body, err := ioutil.ReadAll(r.Body)
-// 	if err != nil {
-// 		http.Error(w, "Invalid message", 400)
-// 		return
-// 	}
-// 	if len(body) == 0 {
-// 		http.Error(w, "Empty request body", 400)
-// 		return
-// 	}
+func createShoppingList(w http.ResponseWriter, r *http.Request) {
+	if r.Body == nil {
+		http.Error(w, "Empty request body", 400)
+		return
+	}
 
-// 	shoppingLists[] = string(body)
-// }
+	decoder := json.NewDecoder(r.Body)
+	var newShoppingList ShoppingList
+	err := decoder.Decode(&newShoppingList)
+	if err != nil {
+		http.Error(w, "Could not parse request body", 400)
+		return
+	}
+
+	shoppingLists[count] = newShoppingList
+	count += 1
+	w.WriteHeader(http.StatusCreated)
+
+}
 
 // func updateMessage(w http.ResponseWriter, r *http.Request) {
 // 	msgId := chi.URLParam(r, "msgId")
