@@ -41,6 +41,7 @@ func registerRoutes() http.Handler {
 
 	r.Route("/", func(r chi.Router) {
 		r.Get("/shoppinglist", getShoppingLists)
+		r.Get("/shoppinglist/{id}", getShoppingList)
 		// r.Get("/shoppinglist/{msgId}", getMessages)
 		r.Post("/shoppinglist", createShoppingList)
 		r.Put("/shoppinglist/{id}", updateShoppingList)
@@ -52,6 +53,27 @@ func registerRoutes() http.Handler {
 func getShoppingLists(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(shoppingLists)
+}
+
+func getShoppingList(w http.ResponseWriter, r *http.Request) {
+	msgId := chi.URLParam(r, "id")
+	if msgId == "" {
+		http.Error(w, "Empty message id", 400)
+		return
+	}
+	id, err := strconv.Atoi(msgId)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
+
+	if shoppingList, exists := shoppingLists[id]; exists {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[int]ShoppingList{id: shoppingList})
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
 }
 
 func createShoppingList(w http.ResponseWriter, r *http.Request) {
