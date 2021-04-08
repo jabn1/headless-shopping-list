@@ -44,7 +44,7 @@ func registerRoutes() http.Handler {
 		// r.Get("/shoppinglist/{msgId}", getMessages)
 		r.Post("/shoppinglist", createShoppingList)
 		r.Put("/shoppinglist/{id}", updateShoppingList)
-		// r.Delete("/shoppinglist/{msgId}", deleteMessage)
+		r.Delete("/shoppinglist/{id}", deleteShoppingList)
 	})
 	return r
 }
@@ -107,22 +107,22 @@ func updateShoppingList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func deleteMessage(w http.ResponseWriter, r *http.Request) {
-// 	msgId := chi.URLParam(r, "msgId")
-// 	if msgId == "" {
-// 		http.Error(w, "Empty message id", 400)
-// 		return
-// 	}
-// 	id, err := strconv.Atoi(msgId)
-// 	if err != nil {
-// 		http.Error(w, "Invalid message id", 400)
-// 		return
-// 	}
+func deleteShoppingList(w http.ResponseWriter, r *http.Request) {
+	msgId := chi.URLParam(r, "id")
+	if msgId == "" {
+		http.Error(w, "Empty message id", 400)
+		return
+	}
+	id, err := strconv.Atoi(msgId)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
 
-// 	if _, exists := messages[id]; exists {
-// 		delete(messages, id)
-// 	} else {
-// 		http.Error(w, "Message id does not exist", 400)
-// 		return
-// 	}
-// }
+	if _, exists := shoppingLists[id]; exists {
+		delete(shoppingLists, id)
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
+}
