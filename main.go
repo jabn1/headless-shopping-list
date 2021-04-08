@@ -18,6 +18,13 @@ type Item struct {
 	Status   string
 }
 
+type ItemDto struct {
+	Name         string
+	Quantity     int
+	Status       string
+	ShoppingList int
+}
+
 type ShoppingList struct {
 	Description string
 	Date        string
@@ -47,6 +54,7 @@ func registerRoutes() http.Handler {
 		r.Delete("/shoppinglist/{id}", deleteShoppingList)
 		r.Get("/item", getItems)
 		r.Get("/item/{name}", getItem)
+		r.Post("/item", createItem)
 	})
 	return r
 }
@@ -90,6 +98,34 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
 	}
+}
+
+func createItem(w http.ResponseWriter, r *http.Request) {
+	if r.Body == nil {
+		http.Error(w, "Empty request body", 400)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	var newItem ItemDto
+	err := decoder.Decode(&newItem)
+	if err != nil {
+		http.Error(w, "Could not parse request body", 400)
+		return
+	}
+	if shoppingList, exists := shoppingLists[newItem.ShoppingList]; exists {
+		if _, exists := shoppingList.Items[newItem.Name]; exists {
+			http.Error(w, "An item with that name already exists", 409)
+			return
+		} else {
+			shoppingLists[newItem.ShoppingList].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status}
+		}
+
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
 }
 
 func getShoppingLists(w http.ResponseWriter, r *http.Request) {
