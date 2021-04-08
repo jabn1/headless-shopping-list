@@ -63,6 +63,7 @@ func registerRoutes() http.Handler {
 
 func getItems(w http.ResponseWriter, r *http.Request) {
 	shoppingListIdString := r.URL.Query().Get("shoppingListId")
+	status := r.URL.Query().Get("status")
 	id, err := strconv.Atoi(shoppingListIdString)
 	if err != nil {
 		http.Error(w, "Invalid shopping list id", 400)
@@ -71,7 +72,18 @@ func getItems(w http.ResponseWriter, r *http.Request) {
 
 	if shoppingList, exists := shoppingLists[id]; exists {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(shoppingList.Items)
+		if status == "" {
+			json.NewEncoder(w).Encode(shoppingList.Items)
+		} else {
+			resultItems := map[string]Item{}
+			for key, element := range shoppingList.Items {
+				if element.Status == status {
+					resultItems[key] = element
+				}
+			}
+			json.NewEncoder(w).Encode(resultItems)
+		}
+
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
