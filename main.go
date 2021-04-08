@@ -42,12 +42,54 @@ func registerRoutes() http.Handler {
 	r.Route("/", func(r chi.Router) {
 		r.Get("/shoppinglist", getShoppingLists)
 		r.Get("/shoppinglist/{id}", getShoppingList)
-		// r.Get("/shoppinglist/{msgId}", getMessages)
 		r.Post("/shoppinglist", createShoppingList)
 		r.Put("/shoppinglist/{id}", updateShoppingList)
 		r.Delete("/shoppinglist/{id}", deleteShoppingList)
+		r.Get("/item", getItems)
+		r.Get("/item/{name}", getItem)
 	})
 	return r
+}
+
+func getItems(w http.ResponseWriter, r *http.Request) {
+	shoppingListIdString := r.URL.Query().Get("shoppingListId")
+	id, err := strconv.Atoi(shoppingListIdString)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
+
+	if shoppingList, exists := shoppingLists[id]; exists {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(shoppingList.Items)
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
+}
+
+func getItem(w http.ResponseWriter, r *http.Request) {
+	shoppingListIdString := r.URL.Query().Get("shoppingListId")
+	itemName := chi.URLParam(r, "name")
+	id, err := strconv.Atoi(shoppingListIdString)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
+
+	if shoppingList, exists := shoppingLists[id]; exists {
+		if item, exists := shoppingList.Items[itemName]; exists {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]Item{itemName: item})
+		} else {
+			http.Error(w, "Shopping list id does not exist", 404)
+			return
+		}
+
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
 }
 
 func getShoppingLists(w http.ResponseWriter, r *http.Request) {
