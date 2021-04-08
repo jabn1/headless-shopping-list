@@ -56,6 +56,7 @@ func registerRoutes() http.Handler {
 		r.Get("/item/{name}", getItem)
 		r.Post("/item", createItem)
 		r.Put("/item", updateItem)
+		r.Delete("/item/{name}", deleteItem)
 	})
 	return r
 }
@@ -145,6 +146,29 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 	if shoppingList, exists := shoppingLists[newItem.ShoppingList]; exists {
 		if _, exists := shoppingList.Items[newItem.Name]; exists {
 			shoppingLists[newItem.ShoppingList].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status}
+		} else {
+			http.Error(w, "Item does not exist", 404)
+			return
+		}
+
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func deleteItem(w http.ResponseWriter, r *http.Request) {
+	shoppingListIdString := r.URL.Query().Get("shoppingListId")
+	itemName := chi.URLParam(r, "name")
+	id, err := strconv.Atoi(shoppingListIdString)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
+	if shoppingList, exists := shoppingLists[id]; exists {
+		if _, exists := shoppingList.Items[itemName]; exists {
+			delete(shoppingLists[id].Items, itemName)
 		} else {
 			http.Error(w, "Item does not exist", 404)
 			return
