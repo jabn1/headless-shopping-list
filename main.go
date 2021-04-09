@@ -16,6 +16,7 @@ import (
 type Item struct {
 	Quantity int
 	Status   string
+	ETag     int `json:"-"`
 }
 
 type ItemDto struct {
@@ -29,15 +30,18 @@ type ShoppingList struct {
 	Description string
 	Date        string
 	Items       map[string]Item //key: item name
+	ETag        int             `json:"-"`
 }
 
-var shoppingLists map[int]ShoppingList
+var shoppingLists map[int]*ShoppingList
 var count int
+var etagCount int
 
 func main() {
 	port := "5000"
-	shoppingLists = map[int]ShoppingList{}
+	shoppingLists = map[int]*ShoppingList{}
 	count = 1
+	etagCount = 1
 	r := registerRoutes()
 	fmt.Println("Listening on port :" + port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
@@ -132,7 +136,10 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "An item with that name already exists", 409)
 			return
 		} else {
-			shoppingLists[newItem.ShoppingList].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status}
+			shoppingLists[newItem.ShoppingList].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
+			etagCount += 1
+			shoppingLists[newItem.ShoppingList].ETag = etagCount
+			etagCount += 1
 		}
 
 	} else {
@@ -158,6 +165,9 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 	if shoppingList, exists := shoppingLists[newItem.ShoppingList]; exists {
 		if _, exists := shoppingList.Items[newItem.Name]; exists {
 			shoppingLists[newItem.ShoppingList].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status}
+			etagCount += 1
+			shoppingLists[newItem.ShoppingList].ETag = etagCount
+			etagCount += 1
 		} else {
 			http.Error(w, "Item does not exist", 404)
 			return
@@ -181,6 +191,8 @@ func deleteItem(w http.ResponseWriter, r *http.Request) {
 	if shoppingList, exists := shoppingLists[id]; exists {
 		if _, exists := shoppingList.Items[itemName]; exists {
 			delete(shoppingLists[id].Items, itemName)
+			shoppingLists[id].ETag = etagCount
+			etagCount += 1
 		} else {
 			http.Error(w, "Item does not exist", 404)
 			return
@@ -212,7 +224,7 @@ func getShoppingList(w http.ResponseWriter, r *http.Request) {
 
 	if shoppingList, exists := shoppingLists[id]; exists {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[int]ShoppingList{id: shoppingList})
+		json.NewEncoder(w).Encode(map[int]ShoppingList{id: *shoppingList})
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
@@ -232,8 +244,9 @@ func createShoppingList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not parse request body", 400)
 		return
 	}
-
-	shoppingLists[count] = newShoppingList
+	newShoppingList.ETag = etagCount
+	etagCount += 1
+	shoppingLists[count] = &newShoppingList
 	count += 1
 	w.WriteHeader(http.StatusCreated)
 
@@ -265,7 +278,9 @@ func updateShoppingList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, exists := shoppingLists[id]; exists {
-		shoppingLists[id] = newShoppingList
+		newShoppingList.ETag = etagCount
+		etagCount += 1
+		shoppingLists[id] = &newShoppingList
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
