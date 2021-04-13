@@ -20,10 +20,9 @@ type Item struct {
 }
 
 type ItemDto struct {
-	Name         string
-	Quantity     int
-	Status       string
-	ShoppingList int
+	Name     string
+	Quantity int
+	Status   string
 }
 
 type ShoppingList struct {
@@ -51,22 +50,22 @@ func registerRoutes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Route("/", func(r chi.Router) {
-		r.Get("/shoppinglist", getShoppingLists)
-		r.Get("/shoppinglist/{id}", getShoppingList)
-		r.Post("/shoppinglist", createShoppingList)
-		r.Put("/shoppinglist/{id}", updateShoppingList)
-		r.Delete("/shoppinglist/{id}", deleteShoppingList)
-		r.Get("/item", getItems)
-		r.Get("/item/{name}", getItem)
-		r.Post("/item", createItem)
-		r.Put("/item", updateItem)
-		r.Delete("/item/{name}", deleteItem)
+		r.Get("/shoppinglists", getShoppingLists)
+		r.Get("/shoppinglists/{id}", getShoppingList)
+		r.Post("/shoppinglists", createShoppingList)
+		r.Put("/shoppinglists/{id}", updateShoppingList)
+		r.Delete("/shoppinglists/{id}", deleteShoppingList)
+		r.Get("/shoppinglists/{id}/items", getItems)
+		r.Get("/shoppinglists/{id}/items/{name}", getItem)
+		r.Post("/shoppinglists/{id}/items", createItem)
+		r.Put("/shoppinglists/{id}/items/{name}", updateItem)
+		r.Delete("/shoppinglists/{id}/items/{name}", deleteItem)
 	})
 	return r
 }
 
 func getItems(w http.ResponseWriter, r *http.Request) {
-	shoppingListIdString := r.URL.Query().Get("shoppingListId")
+	shoppingListIdString := chi.URLParam(r, "id")
 	status := r.URL.Query().Get("status")
 	id, err := strconv.Atoi(shoppingListIdString)
 	if err != nil {
@@ -95,7 +94,7 @@ func getItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func getItem(w http.ResponseWriter, r *http.Request) {
-	shoppingListIdString := r.URL.Query().Get("shoppingListId")
+	shoppingListIdString := chi.URLParam(r, "id")
 	itemName := chi.URLParam(r, "name")
 	id, err := strconv.Atoi(shoppingListIdString)
 	if err != nil {
@@ -119,6 +118,13 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func createItem(w http.ResponseWriter, r *http.Request) {
+	shoppingListIdString := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(shoppingListIdString)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
+
 	if r.Body == nil {
 		http.Error(w, "Empty request body", 400)
 		return
@@ -126,19 +132,19 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	var newItem ItemDto
-	err := decoder.Decode(&newItem)
+	err = decoder.Decode(&newItem)
 	if err != nil {
 		http.Error(w, "Could not parse request body", 400)
 		return
 	}
-	if shoppingList, exists := shoppingLists[newItem.ShoppingList]; exists {
+	if shoppingList, exists := shoppingLists[id]; exists {
 		if _, exists := shoppingList.Items[newItem.Name]; exists {
 			http.Error(w, "An item with that name already exists", 409)
 			return
 		} else {
-			shoppingLists[newItem.ShoppingList].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
+			shoppingLists[id].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
 			etagCount += 1
-			shoppingLists[newItem.ShoppingList].ETag = etagCount
+			shoppingLists[id].ETag = etagCount
 			etagCount += 1
 		}
 
@@ -150,23 +156,31 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateItem(w http.ResponseWriter, r *http.Request) {
+	shoppingListIdString := chi.URLParam(r, "id")
+	itemName := chi.URLParam(r, "name")
+	id, err := strconv.Atoi(shoppingListIdString)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
+
 	if r.Body == nil {
 		http.Error(w, "Empty request body", 400)
 		return
 	}
 
 	decoder := json.NewDecoder(r.Body)
-	var newItem ItemDto
-	err := decoder.Decode(&newItem)
+	var newItem Item
+	err = decoder.Decode(&newItem)
 	if err != nil {
 		http.Error(w, "Could not parse request body", 400)
 		return
 	}
-	if shoppingList, exists := shoppingLists[newItem.ShoppingList]; exists {
-		if _, exists := shoppingList.Items[newItem.Name]; exists {
-			shoppingLists[newItem.ShoppingList].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status}
+	if shoppingList, exists := shoppingLists[id]; exists {
+		if _, exists := shoppingList.Items[itemName]; exists {
+			shoppingLists[id].Items[itemName] = Item{Quantity: newItem.Quantity, Status: newItem.Status}
 			etagCount += 1
-			shoppingLists[newItem.ShoppingList].ETag = etagCount
+			shoppingLists[id].ETag = etagCount
 			etagCount += 1
 		} else {
 			http.Error(w, "Item does not exist", 404)
@@ -181,7 +195,7 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteItem(w http.ResponseWriter, r *http.Request) {
-	shoppingListIdString := r.URL.Query().Get("shoppingListId")
+	shoppingListIdString := chi.URLParam(r, "id")
 	itemName := chi.URLParam(r, "name")
 	id, err := strconv.Atoi(shoppingListIdString)
 	if err != nil {
