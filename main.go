@@ -34,12 +34,14 @@ var shoppingLists map[int]*ShoppingList
 var count int
 var etagCount int
 var port string
+var listsEtag int
 
 func main() {
 	port = "5000"
 	shoppingLists = map[int]*ShoppingList{}
 	count = 1
 	etagCount = 1
+	listsEtag = 0
 	r := registerRoutes()
 	fmt.Println("Listening on port :" + port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
@@ -75,6 +77,7 @@ func getItems(w http.ResponseWriter, r *http.Request) {
 	if shoppingList, exists := shoppingLists[id]; exists {
 		w.Header().Set("Content-Type", "application/json")
 		if status == "" {
+			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
 			json.NewEncoder(w).Encode(shoppingList.Items)
 		} else {
 			resultItems := map[string]Item{}
@@ -83,6 +86,7 @@ func getItems(w http.ResponseWriter, r *http.Request) {
 					resultItems[key] = element
 				}
 			}
+			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
 			json.NewEncoder(w).Encode(resultItems)
 		}
 
@@ -104,6 +108,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 	if shoppingList, exists := shoppingLists[id]; exists {
 		if item, exists := shoppingList.Items[itemName]; exists {
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
 			json.NewEncoder(w).Encode(map[string]Item{itemName: item})
 		} else {
 			http.Error(w, "Shopping list id does not exist", 404)
@@ -145,6 +150,8 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 			etagCount += 1
 			shoppingLists[id].ETag = etagCount
 			etagCount += 1
+			listsEtag = etagCount
+			etagCount += 1
 		}
 
 	} else {
@@ -152,6 +159,7 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Location", "http://localhost:"+port+"/shoppinglists/"+strconv.Itoa(id)+"/"+newItem.Name)
+	w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[newItem.Name].ETag))
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -182,6 +190,8 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 			etagCount += 1
 			shoppingLists[id].ETag = etagCount
 			etagCount += 1
+			listsEtag = etagCount
+			etagCount += 1
 		} else {
 			http.Error(w, "Item does not exist", 404)
 			return
@@ -191,6 +201,7 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
 	}
+	w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -207,6 +218,8 @@ func deleteItem(w http.ResponseWriter, r *http.Request) {
 			delete(shoppingLists[id].Items, itemName)
 			shoppingLists[id].ETag = etagCount
 			etagCount += 1
+			listsEtag = etagCount
+			etagCount += 1
 		} else {
 			http.Error(w, "Item does not exist", 404)
 			return
@@ -220,8 +233,14 @@ func deleteItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func getShoppingLists(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(shoppingLists)
+	ifNoneMatch := r.Header.Get("If-None-Match")
+	if ifNoneMatch == "" || ifNoneMatch != strconv.Itoa(listsEtag) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Etag", strconv.Itoa(listsEtag))
+		json.NewEncoder(w).Encode(shoppingLists)
+	} else {
+		w.WriteHeader(http.StatusNotModified)
+	}
 }
 
 func getShoppingList(w http.ResponseWriter, r *http.Request) {
@@ -238,6 +257,7 @@ func getShoppingList(w http.ResponseWriter, r *http.Request) {
 
 	if shoppingList, exists := shoppingLists[id]; exists {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
 		json.NewEncoder(w).Encode(map[int]ShoppingList{id: *shoppingList})
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
@@ -260,7 +280,10 @@ func createShoppingList(w http.ResponseWriter, r *http.Request) {
 	}
 	newShoppingList.ETag = etagCount
 	etagCount += 1
+	listsEtag = etagCount
+	etagCount += 1
 	shoppingLists[count] = &newShoppingList
+	w.Header().Set("Etag", strconv.Itoa(shoppingLists[count].ETag))
 	w.Header().Set("Location", "http://localhost:"+port+"/shoppinglists/"+strconv.Itoa(count))
 	count += 1
 
@@ -295,8 +318,12 @@ func updateShoppingList(w http.ResponseWriter, r *http.Request) {
 
 	if _, exists := shoppingLists[id]; exists {
 		newShoppingList.ETag = etagCount
+
+		etagCount += 1
+		listsEtag = etagCount
 		etagCount += 1
 		shoppingLists[id] = &newShoppingList
+		w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
@@ -317,6 +344,8 @@ func deleteShoppingList(w http.ResponseWriter, r *http.Request) {
 
 	if _, exists := shoppingLists[id]; exists {
 		delete(shoppingLists, id)
+		listsEtag = etagCount
+		etagCount += 1
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
