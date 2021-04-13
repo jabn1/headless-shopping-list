@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-
+	"strings"
 	"log"
 	"net/http"
 
@@ -35,8 +35,12 @@ var count int
 var etagCount int
 var port string
 var listsEtag int
+var username string
+var password string
 
 func main() {
+	username = "user"
+	password = "1234"
 	port = "5000"
 	shoppingLists = map[int]*ShoppingList{}
 	count = 1
@@ -51,22 +55,47 @@ func registerRoutes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Route("/", func(r chi.Router) {
-		r.Get("/shoppinglists", getShoppingLists)
-		r.Get("/shoppinglists/{id}", getShoppingList)
-		r.Post("/shoppinglists", createShoppingList)
-		r.Put("/shoppinglists/{id}", updateShoppingList)
-		r.Delete("/shoppinglists/{id}", deleteShoppingList)
-		r.Get("/shoppinglists/{id}/items", getItems)
-		r.Get("/shoppinglists/{id}/items/{name}", getItem)
-		r.Post("/shoppinglists/{id}/items", createItem)
-		r.Put("/shoppinglists/{id}/items/{name}", updateItem)
-		r.Delete("/shoppinglists/{id}/items/{name}", deleteItem)
-		r.Head("/shoppinglists", getShoppingLists)
-		r.Head("/shoppinglists/{id}", getShoppingList)
-		r.Head("/shoppinglists/{id}/items", getItems)
-		r.Head("/shoppinglists/{id}/items/{name}", getItem)
+		r.Get("/shoppinglists", BasicAuth(getShoppingLists))
+		r.Get("/shoppinglists/{id}", BasicAuth(getShoppingList))
+		r.Post("/shoppinglists", BasicAuth(createShoppingList))
+		r.Put("/shoppinglists/{id}", BasicAuth(updateShoppingList))
+		r.Delete("/shoppinglists/{id}", BasicAuth(deleteShoppingList))
+		r.Get("/shoppinglists/{id}/items", BasicAuth(getItems))
+		r.Get("/shoppinglists/{id}/items/{name}", BasicAuth(getItem))
+		r.Post("/shoppinglists/{id}/items", BasicAuth(createItem))
+		r.Put("/shoppinglists/{id}/items/{name}", BasicAuth(updateItem))
+		r.Delete("/shoppinglists/{id}/items/{name}", BasicAuth(deleteItem))
+		r.Head("/shoppinglists", BasicAuth(getShoppingLists))
+		r.Head("/shoppinglists/{id}", BasicAuth(getShoppingList))
+		r.Head("/shoppinglists/{id}/items", BasicAuth(getItems))
+		r.Head("/shoppinglists/{id}/items/{name}", BasicAuth(getItem))
 	})
 	return r
+}
+
+func BasicAuth(handler http.HandlerFunc) http.HandlerFunc {
+	return func(rw http.ResponseWriter, rq *http.Request) {
+		u, p, ok := rq.BasicAuth()
+		if !ok || len(strings.TrimSpace(u)) < 1 || len(strings.TrimSpace(p)) < 1 {
+			unauthorised(rw)
+			return
+		}
+ 
+		// This is a dummy check for credentials.
+		if u != username || p != password {
+			unauthorised(rw)
+			return
+		}
+ 
+		// If required, Context could be updated to include authentication
+		// related data so that it could be used in consequent steps.
+		handler(rw, rq)
+	}
+}
+ 
+func unauthorised(rw http.ResponseWriter) {
+	rw.Header().Set("WWW-Authenticate", "Basic realm=Restricted")
+	rw.WriteHeader(http.StatusUnauthorized)
 }
 
 func getItems(w http.ResponseWriter, r *http.Request) {
