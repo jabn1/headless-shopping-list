@@ -245,6 +245,7 @@ func getShoppingLists(w http.ResponseWriter, r *http.Request) {
 
 func getShoppingList(w http.ResponseWriter, r *http.Request) {
 	msgId := chi.URLParam(r, "id")
+	ifNoneMatch := r.Header.Get("If-None-Match")
 	if msgId == "" {
 		http.Error(w, "Empty message id", 400)
 		return
@@ -256,9 +257,14 @@ func getShoppingList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if shoppingList, exists := shoppingLists[id]; exists {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
-		json.NewEncoder(w).Encode(map[int]ShoppingList{id: *shoppingList})
+		if ifNoneMatch == "" || ifNoneMatch != strconv.Itoa(shoppingLists[id].ETag) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
+			json.NewEncoder(w).Encode(map[int]ShoppingList{id: *shoppingList})
+		} else {
+			w.WriteHeader(http.StatusNotModified)
+		}
+
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
