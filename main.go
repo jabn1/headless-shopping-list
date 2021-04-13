@@ -67,6 +67,7 @@ func registerRoutes() http.Handler {
 
 func getItems(w http.ResponseWriter, r *http.Request) {
 	shoppingListIdString := chi.URLParam(r, "id")
+	ifNoneMatch := r.Header.Get("If-None-Match")
 	status := r.URL.Query().Get("status")
 	id, err := strconv.Atoi(shoppingListIdString)
 	if err != nil {
@@ -75,19 +76,23 @@ func getItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if shoppingList, exists := shoppingLists[id]; exists {
-		w.Header().Set("Content-Type", "application/json")
-		if status == "" {
-			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
-			json.NewEncoder(w).Encode(shoppingList.Items)
-		} else {
-			resultItems := map[string]Item{}
-			for key, element := range shoppingList.Items {
-				if element.Status == status {
-					resultItems[key] = element
+		if ifNoneMatch == "" || ifNoneMatch != strconv.Itoa(shoppingLists[id].ETag) {
+			w.Header().Set("Content-Type", "application/json")
+			if status == "" {
+				w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
+				json.NewEncoder(w).Encode(shoppingList.Items)
+			} else {
+				resultItems := map[string]Item{}
+				for key, element := range shoppingList.Items {
+					if element.Status == status {
+						resultItems[key] = element
+					}
 				}
+				w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
+				json.NewEncoder(w).Encode(resultItems)
 			}
-			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
-			json.NewEncoder(w).Encode(resultItems)
+		} else {
+			w.WriteHeader(http.StatusNotModified)
 		}
 
 	} else {
@@ -98,6 +103,7 @@ func getItems(w http.ResponseWriter, r *http.Request) {
 
 func getItem(w http.ResponseWriter, r *http.Request) {
 	shoppingListIdString := chi.URLParam(r, "id")
+	ifNoneMatch := r.Header.Get("If-None-Match")
 	itemName := chi.URLParam(r, "name")
 	id, err := strconv.Atoi(shoppingListIdString)
 	if err != nil {
@@ -107,9 +113,13 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 
 	if shoppingList, exists := shoppingLists[id]; exists {
 		if item, exists := shoppingList.Items[itemName]; exists {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
-			json.NewEncoder(w).Encode(map[string]Item{itemName: item})
+			if ifNoneMatch == "" || ifNoneMatch != strconv.Itoa(shoppingList.Items[itemName].ETag) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
+				json.NewEncoder(w).Encode(map[string]Item{itemName: item})
+			} else {
+				w.WriteHeader(http.StatusNotModified)
+			}
 		} else {
 			http.Error(w, "Shopping list id does not exist", 404)
 			return
