@@ -61,6 +61,10 @@ func registerRoutes() http.Handler {
 		r.Post("/shoppinglists/{id}/items", createItem)
 		r.Put("/shoppinglists/{id}/items/{name}", updateItem)
 		r.Delete("/shoppinglists/{id}/items/{name}", deleteItem)
+		r.Head("/shoppinglists", getShoppingLists)
+		r.Head("/shoppinglists/{id}", getShoppingList)
+		r.Head("/shoppinglists/{id}/items", getItems)
+		r.Head("/shoppinglists/{id}/items/{name}", getItem)
 	})
 	return r
 }
