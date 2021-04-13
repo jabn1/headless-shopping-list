@@ -8,8 +8,6 @@ import (
 	"log"
 	"net/http"
 
-	// "strconv"
-
 	"github.com/go-chi/chi"
 )
 
@@ -35,9 +33,10 @@ type ShoppingList struct {
 var shoppingLists map[int]*ShoppingList
 var count int
 var etagCount int
+var port string
 
 func main() {
-	port := "5000"
+	port = "5000"
 	shoppingLists = map[int]*ShoppingList{}
 	count = 1
 	etagCount = 1
@@ -152,6 +151,7 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
 	}
+	w.Header().Set("Location", "http://localhost:"+port+"/shoppinglists/"+strconv.Itoa(id)+"/"+newItem.Name)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -261,7 +261,9 @@ func createShoppingList(w http.ResponseWriter, r *http.Request) {
 	newShoppingList.ETag = etagCount
 	etagCount += 1
 	shoppingLists[count] = &newShoppingList
+	w.Header().Set("Location", "http://localhost:"+port+"/shoppinglists/"+strconv.Itoa(count))
 	count += 1
+
 	w.WriteHeader(http.StatusCreated)
 
 }
