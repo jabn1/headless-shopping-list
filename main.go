@@ -26,8 +26,8 @@ type ItemDto struct {
 type ShoppingList struct {
 	Description string
 	Date        string
-	Items       map[string]Item //key: item name
-	ETag        int             `json:"-"`
+	Items       map[string]*Item //key: item name
+	ETag        int              `json:"-"`
 }
 
 var shoppingLists map[int]*ShoppingList
@@ -85,7 +85,7 @@ func getItems(w http.ResponseWriter, r *http.Request) {
 				resultItems := map[string]Item{}
 				for key, element := range shoppingList.Items {
 					if element.Status == status {
-						resultItems[key] = element
+						resultItems[key] = *element
 					}
 				}
 				w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
@@ -116,7 +116,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 			if ifNoneMatch == "" || ifNoneMatch != strconv.Itoa(shoppingList.Items[itemName].ETag) {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
-				json.NewEncoder(w).Encode(map[string]Item{itemName: item})
+				json.NewEncoder(w).Encode(map[string]Item{itemName: *item})
 			} else {
 				w.WriteHeader(http.StatusNotModified)
 			}
@@ -156,7 +156,7 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "An item with that name already exists", 409)
 			return
 		} else {
-			shoppingLists[id].Items[newItem.Name] = Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
+			shoppingLists[id].Items[newItem.Name] = &Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
 			etagCount += 1
 			shoppingLists[id].ETag = etagCount
 			etagCount += 1
@@ -196,7 +196,7 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if shoppingList, exists := shoppingLists[id]; exists {
 		if _, exists := shoppingList.Items[itemName]; exists {
-			shoppingLists[id].Items[itemName] = Item{Quantity: newItem.Quantity, Status: newItem.Status}
+			shoppingLists[id].Items[itemName] = &Item{Quantity: newItem.Quantity, Status: newItem.Status}
 			etagCount += 1
 			shoppingLists[id].ETag = etagCount
 			etagCount += 1
@@ -294,11 +294,16 @@ func createShoppingList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not parse request body", 400)
 		return
 	}
+	for key := range newShoppingList.Items {
+		newShoppingList.Items[key].ETag = etagCount
+		etagCount += 1
+	}
 	newShoppingList.ETag = etagCount
 	etagCount += 1
 	listsEtag = etagCount
 	etagCount += 1
 	shoppingLists[count] = &newShoppingList
+
 	w.Header().Set("Etag", strconv.Itoa(shoppingLists[count].ETag))
 	w.Header().Set("Location", "http://localhost:"+port+"/shoppinglists/"+strconv.Itoa(count))
 	count += 1
