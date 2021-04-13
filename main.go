@@ -339,8 +339,11 @@ func updateShoppingList(w http.ResponseWriter, r *http.Request) {
 
 	if _, exists := shoppingLists[id]; exists {
 		newShoppingList.ETag = etagCount
-
 		etagCount += 1
+		for key := range newShoppingList.Items {
+			newShoppingList.Items[key].ETag = etagCount
+			etagCount += 1
+		}
 		listsEtag = etagCount
 		etagCount += 1
 		shoppingLists[id] = &newShoppingList
