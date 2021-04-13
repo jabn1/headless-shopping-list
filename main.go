@@ -175,6 +175,7 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 
 func updateItem(w http.ResponseWriter, r *http.Request) {
 	shoppingListIdString := chi.URLParam(r, "id")
+	ifMatch := r.Header.Get("If-Match")
 	itemName := chi.URLParam(r, "name")
 	id, err := strconv.Atoi(shoppingListIdString)
 	if err != nil {
@@ -196,12 +197,17 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if shoppingList, exists := shoppingLists[id]; exists {
 		if _, exists := shoppingList.Items[itemName]; exists {
-			shoppingLists[id].Items[itemName] = &Item{Quantity: newItem.Quantity, Status: newItem.Status}
-			etagCount += 1
-			shoppingLists[id].ETag = etagCount
-			etagCount += 1
-			listsEtag = etagCount
-			etagCount += 1
+			if ifMatch == strconv.Itoa(shoppingList.Items[itemName].ETag) {
+				shoppingLists[id].Items[itemName] = &Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
+				etagCount += 1
+				shoppingLists[id].ETag = etagCount
+				etagCount += 1
+				listsEtag = etagCount
+				etagCount += 1
+				w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
+			} else {
+				w.WriteHeader(http.StatusConflict)
+			}
 		} else {
 			http.Error(w, "Item does not exist", 404)
 			return
@@ -211,8 +217,7 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
 	}
-	w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
-	w.WriteHeader(http.StatusOK)
+
 }
 
 func deleteItem(w http.ResponseWriter, r *http.Request) {
@@ -314,6 +319,7 @@ func createShoppingList(w http.ResponseWriter, r *http.Request) {
 
 func updateShoppingList(w http.ResponseWriter, r *http.Request) {
 	msgId := chi.URLParam(r, "id")
+	ifMatch := r.Header.Get("If-Match")
 	if msgId == "" {
 		http.Error(w, "Empty message id", 400)
 		return
@@ -338,16 +344,21 @@ func updateShoppingList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, exists := shoppingLists[id]; exists {
-		newShoppingList.ETag = etagCount
-		etagCount += 1
-		for key := range newShoppingList.Items {
-			newShoppingList.Items[key].ETag = etagCount
+		if ifMatch == strconv.Itoa(shoppingLists[id].ETag) {
+			newShoppingList.ETag = etagCount
 			etagCount += 1
+			for key := range newShoppingList.Items {
+				newShoppingList.Items[key].ETag = etagCount
+				etagCount += 1
+			}
+			listsEtag = etagCount
+			etagCount += 1
+			shoppingLists[id] = &newShoppingList
+			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
+		} else {
+			w.WriteHeader(http.StatusConflict)
 		}
-		listsEtag = etagCount
-		etagCount += 1
-		shoppingLists[id] = &newShoppingList
-		w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
+
 	} else {
 		http.Error(w, "Shopping list id does not exist", 404)
 		return
