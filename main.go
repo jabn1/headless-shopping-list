@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-
+	"strings"
 	"log"
 	"net/http"
 
@@ -46,8 +46,12 @@ var count int
 var etagCount int
 var port string
 var listsEtag int
+var username string
+var password string
 
 func main() {
+	username = "user"
+	password = "1234"
 	port = "5000"
 	shoppingLists = map[int]*ShoppingList{}
 	count = 1
@@ -78,9 +82,33 @@ func registerRoutes() http.Handler {
 		r.Head("/shoppinglists/{id}", getShoppingList)
 		r.Head("/shoppinglists/{id}/items", getItems)
 		r.Head("/shoppinglists/{id}/items/{name}", getItem)
-
 	})
 	return r
+}
+
+func BasicAuth(handler http.HandlerFunc) http.HandlerFunc {
+	return func(rw http.ResponseWriter, rq *http.Request) {
+		u, p, ok := rq.BasicAuth()
+		if !ok || len(strings.TrimSpace(u)) < 1 || len(strings.TrimSpace(p)) < 1 {
+			unauthorised(rw)
+			return
+		}
+ 
+		// This is a dummy check for credentials.
+		if u != username || p != password {
+			unauthorised(rw)
+			return
+		}
+ 
+		// If required, Context could be updated to include authentication
+		// related data so that it could be used in consequent steps.
+		handler(rw, rq)
+	}
+}
+ 
+func unauthorised(rw http.ResponseWriter) {
+	rw.Header().Set("WWW-Authenticate", "Basic realm=Restricted")
+	rw.WriteHeader(http.StatusUnauthorized)
 }
 
 func getItems(w http.ResponseWriter, r *http.Request) {
