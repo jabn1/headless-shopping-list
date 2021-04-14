@@ -23,11 +23,23 @@ type ItemDto struct {
 	Status   string
 }
 
+type ItemPatchDto struct {
+	Name     *string
+	Quantity *int
+	Status   *string
+}
+
 type ShoppingList struct {
 	Description string
 	Date        string
 	Items       map[string]*Item //key: item name
 	ETag        int              `json:"-"`
+}
+
+type ShoppingListDto struct {
+	Description *string
+	Date        *string
+	Items       map[string]*Item //key: item name
 }
 
 var shoppingLists map[int]*ShoppingList
@@ -55,6 +67,7 @@ func registerRoutes() http.Handler {
 		r.Get("/shoppinglists/{id}", getShoppingList)
 		r.Post("/shoppinglists", createShoppingList)
 		r.Put("/shoppinglists/{id}", updateShoppingList)
+		r.Patch("/shoppinglists/{id}", patchShoppingList)
 		r.Delete("/shoppinglists/{id}", deleteShoppingList)
 		r.Get("/shoppinglists/{id}/items", getItems)
 		r.Get("/shoppinglists/{id}/items/{name}", getItem)
@@ -65,6 +78,7 @@ func registerRoutes() http.Handler {
 		r.Head("/shoppinglists/{id}", getShoppingList)
 		r.Head("/shoppinglists/{id}/items", getItems)
 		r.Head("/shoppinglists/{id}/items/{name}", getItem)
+
 	})
 	return r
 }
@@ -358,6 +372,63 @@ func updateShoppingList(w http.ResponseWriter, r *http.Request) {
 			listsEtag = etagCount
 			etagCount += 1
 			shoppingLists[id] = &newShoppingList
+			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
+			w.WriteHeader(http.StatusNoContent)
+		} else {
+			w.WriteHeader(http.StatusConflict)
+		}
+
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
+}
+
+func patchShoppingList(w http.ResponseWriter, r *http.Request) {
+	msgId := chi.URLParam(r, "id")
+	ifMatch := r.Header.Get("If-Match")
+	if msgId == "" {
+		http.Error(w, "Empty message id", 400)
+		return
+	}
+
+	if r.Body == nil {
+		http.Error(w, "Empty request body", 400)
+		return
+	}
+	id, err := strconv.Atoi(msgId)
+	if err != nil {
+		http.Error(w, "Invalid message id", 400)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	var newShoppingList ShoppingListDto
+	err = decoder.Decode(&newShoppingList)
+	if err != nil {
+		http.Error(w, "Could not parse request body", 400)
+		return
+	}
+
+	if _, exists := shoppingLists[id]; exists {
+		if ifMatch == strconv.Itoa(shoppingLists[id].ETag) {
+			if newShoppingList.Date != nil {
+				shoppingLists[id].Date = *newShoppingList.Date
+			}
+			if newShoppingList.Description != nil {
+				shoppingLists[id].Description = *newShoppingList.Description
+			}
+			if newShoppingList.Items != nil {
+				shoppingLists[id].Items = *&newShoppingList.Items
+			}
+			shoppingLists[id].ETag = etagCount
+			etagCount += 1
+			for key := range newShoppingList.Items {
+				newShoppingList.Items[key].ETag = etagCount
+				etagCount += 1
+			}
+			listsEtag = etagCount
+			etagCount += 1
 			w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].ETag))
 		} else {
 			w.WriteHeader(http.StatusConflict)
