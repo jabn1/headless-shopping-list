@@ -24,7 +24,6 @@ type ItemDto struct {
 }
 
 type ItemPatchDto struct {
-	Name     *string
 	Quantity *int
 	Status   *string
 }
@@ -73,6 +72,7 @@ func registerRoutes() http.Handler {
 		r.Get("/shoppinglists/{id}/items/{name}", getItem)
 		r.Post("/shoppinglists/{id}/items", createItem)
 		r.Put("/shoppinglists/{id}/items/{name}", updateItem)
+		r.Patch("/shoppinglists/{id}/items/{name}", patchItem)
 		r.Delete("/shoppinglists/{id}/items/{name}", deleteItem)
 		r.Head("/shoppinglists", getShoppingLists)
 		r.Head("/shoppinglists/{id}", getShoppingList)
@@ -217,6 +217,60 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 		if _, exists := shoppingList.Items[itemName]; exists {
 			if ifMatch == strconv.Itoa(shoppingList.Items[itemName].ETag) {
 				shoppingLists[id].Items[itemName] = &Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
+				etagCount += 1
+				shoppingLists[id].ETag = etagCount
+				etagCount += 1
+				listsEtag = etagCount
+				etagCount += 1
+				w.Header().Set("Etag", strconv.Itoa(shoppingLists[id].Items[itemName].ETag))
+			} else {
+				w.WriteHeader(http.StatusConflict)
+			}
+		} else {
+			http.Error(w, "Item does not exist", 404)
+			return
+		}
+
+	} else {
+		http.Error(w, "Shopping list id does not exist", 404)
+		return
+	}
+
+}
+
+func patchItem(w http.ResponseWriter, r *http.Request) {
+	shoppingListIdString := chi.URLParam(r, "id")
+	ifMatch := r.Header.Get("If-Match")
+	itemName := chi.URLParam(r, "name")
+	id, err := strconv.Atoi(shoppingListIdString)
+	if err != nil {
+		http.Error(w, "Invalid shopping list id", 400)
+		return
+	}
+
+	if r.Body == nil {
+		http.Error(w, "Empty request body", 400)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	var newItem ItemPatchDto
+	err = decoder.Decode(&newItem)
+	if err != nil {
+		http.Error(w, "Could not parse request body", 400)
+		return
+	}
+	if shoppingList, exists := shoppingLists[id]; exists {
+		if _, exists := shoppingList.Items[itemName]; exists {
+			if ifMatch == strconv.Itoa(shoppingList.Items[itemName].ETag) {
+				//shoppingLists[id].Items[itemName] = &Item{Quantity: newItem.Quantity, Status: newItem.Status, ETag: etagCount}
+				if newItem.Quantity != nil {
+					shoppingLists[id].Items[itemName].Quantity = *newItem.Quantity
+				}
+				if newItem.Status != nil {
+					shoppingLists[id].Items[itemName].Status = *newItem.Status
+				}
+				shoppingLists[id].Items[itemName].ETag = etagCount
 				etagCount += 1
 				shoppingLists[id].ETag = etagCount
 				etagCount += 1
@@ -424,7 +478,7 @@ func patchShoppingList(w http.ResponseWriter, r *http.Request) {
 			shoppingLists[id].ETag = etagCount
 			etagCount += 1
 			for key := range newShoppingList.Items {
-				newShoppingList.Items[key].ETag = etagCount
+				shoppingLists[id].Items[key].ETag = etagCount
 				etagCount += 1
 			}
 			listsEtag = etagCount
